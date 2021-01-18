@@ -22,6 +22,8 @@ class DeliverySite:
 @dataclass
 class UsageData:
     resolution: str
+    customer_id: str
+    site_id: str
     delivery_site_info: dict
     data: List[dict]
 

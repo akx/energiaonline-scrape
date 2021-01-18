@@ -1,7 +1,7 @@
 import datetime
 import json
 import logging
-from typing import Iterable
+from typing import Iterable, Optional, Callable
 
 import requests
 from dateutil.relativedelta import relativedelta
@@ -37,6 +37,7 @@ def get_usage(
     resolution: str,
     start_date: datetime.date,
     end_date: datetime.date,
+    date_filter: Optional[Callable[[datetime.date], bool]] = None,
 ) -> UsageData:
     token = get_reporting_token(sess)
     list(get_delivery_sites(sess, token))  # required for correct sequence, who knows...
@@ -85,6 +86,9 @@ def get_usage(
         raise ValueError(f"Unknown resolution {resolution}")
 
     for i, date in enumerate(date_iter, 1):
+        if date_filter and not date_filter(date):
+            log.info(f"Skipping request for {date}")
+            continue
         log.info(f"Making {resolution} ShowReportingView request {i} ({date})...")
         resp = sess.post(
             url="https://www.energiaonline.fi/EnergyReporting/ShowReportingView",
@@ -97,6 +101,8 @@ def get_usage(
         datums.extend(cfg["dataProvider"])
 
     return UsageData(
+        customer_id=customer_id,
+        site_id=site_id,
         resolution=resolution,
         data=datums,
         delivery_site_info=delivery_site_info,

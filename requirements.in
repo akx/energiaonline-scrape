@@ -3,3 +3,4 @@ click
 envparse
 python-dateutil
 requests
+sqlalchemy
