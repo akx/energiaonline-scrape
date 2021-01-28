@@ -30,7 +30,7 @@ def get_metadata(bind=None, data_table_name="eos_data"):
         sa.Column("site_id", sa.Integer),
         sa.Column("customer_id", sa.Integer),
         sa.Column("timestamp", sa.Integer),
-        sa.Column("iso8601", sa.Text),
+        sa.Column("dt", sa.DateTime),
         sa.Column("temperature", sa.Float, nullable=True),
         sa.Column("consumption", sa.Float, nullable=True),
         sa.Column("spot_price", sa.Float, nullable=True),
@@ -64,7 +64,7 @@ def find_extant_dates(
     ts0 = datetime.datetime.combine(start_date, datetime.time()).timestamp()
     ts1 = datetime.datetime.combine(end_date, datetime.time(23, 59, 59)).timestamp()
     q = (
-        sa.sql.select([sa.func.substr(data_table.c.iso8601, 0, 11)])
+        sa.sql.select([sa.cast(data_table.c.dt, sa.Date)])
         .where(
             data_table.c.timestamp.between(ts0, ts1)
             & (data_table.c.customer_id == (customer_id))
@@ -72,9 +72,7 @@ def find_extant_dates(
         )
         .distinct()
     )
-    return {
-        datetime.date.fromisoformat(r[0]) for r in metadata.bind.connect().execute(q)
-    }
+    return {r[0] for r in metadata.bind.connect().execute(q)}
 
 
 def generate_sql_params(usage: UsageData):
@@ -94,7 +92,7 @@ def generate_sql_params(usage: UsageData):
             "site_id": usage.site_id,
             "customer_id": usage.customer_id,
             "timestamp": utc_ts.timestamp(),
-            "iso8601": date.isoformat(),
+            "dt": date,
             "data": data,
             "temperature": data.get("TEMP"),
             "consumption": data.get("PS"),
