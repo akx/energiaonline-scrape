@@ -80,9 +80,11 @@ def _fix_date_defaults(start_date, end_date, back_days=30):
 
 
 @main.command(name="update_database")
-@click.option("-s", "--site", required=True)
-@click.option("-c", "--customer", required=True)
-@click.option("--db", "--database-url", "database_url", required=True)
+@click.option("-s", "--site", envvar="EO_SITE_ID", required=True)
+@click.option("-c", "--customer", envvar="EO_CUSTOMER_ID", required=True)
+@click.option(
+    "--db", "--database-url", "database_url", envvar="EO_DATABASE_URL", required=True
+)
 @click.option("--start-date", type=parse_date)
 @click.option("--end-date", type=parse_date)
 @click.option("--back-days", type=int, default=7)
