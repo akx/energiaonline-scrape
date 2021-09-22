@@ -55,7 +55,7 @@ def generate_sql_params(usage: UsageData):
         yield {
             "site_id": usage.site.metering_point_code,
             "customer_id": 0,
-            "timestamp": point.timestamp,
+            "timestamp": int(point.timestamp.timestamp()),
             "dt": point.timestamp.date(),
             "data": point.as_dict(),
             "temperature": point.temperature,
