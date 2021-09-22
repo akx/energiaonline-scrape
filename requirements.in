@@ -1,6 +1,4 @@
-beautifulsoup4
 click
 envparse
-python-dateutil
 requests
 sqlalchemy
