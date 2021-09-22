@@ -10,7 +10,7 @@ https://www.energiaonline.fi/ , the Turku Energia self-service portal.
 
 ## Usage
 
-*  You can also pass in your EO username and password as the environment variables `EO_USERNAME` and `EO_PASSWORD`.
+* You can also pass in your EO username and password as the environment variables `EO_USERNAME` and `EO_PASSWORD`.
    They can also be read from an `.env` file.
 
 ### Listing distribution sites
@@ -24,11 +24,10 @@ python -m eos -u YOURUSERNAME -p YOURPASSWORD sites
 ### Getting usage data as JSON
 
 ```
-python -m eos usage -u YOURUSERNAME -p YOURPASSWORD -s SITEID -c CUSTOMERID > data.json
+python -m eos usage -u YOURUSERNAME -p YOURPASSWORD -s SITEID > data.jsonl
 ```
 
-The default is to download hourly data, but you can also pass in `--resolution daily`.
-By default, data for the last 30 days is downloaded.
+The Energiaonline site serves data for the last year.
 
 ### Updating usage data into an SQL database
 
@@ -39,5 +38,9 @@ to use a MySQL or PostgreSQL database instead of Sqlite, but that hasn't quite b
 The schema is "described" in `eos/database.py`.
 
 ```
-python -m update_database -s SITEID -c CUSTOMERID --db sqlite:///./usage.sqlite3
+python -m update_database -s SITEID --db sqlite:///./usage.sqlite3
 ```
+
+## Caveats/TODO
+
+* Spot price data is not available in EnergiaOnline v2 (May 2021).
