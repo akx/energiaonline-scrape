@@ -10,26 +10,23 @@ log = logging.getLogger(__name__)
 
 def do_login(sess: requests.Session, cfg: Configuration):
     log.info("Logging in")
-    resp = sess.get("https://www.energiaonline.fi/")
+    resp = sess.get("https://energiaonline.turkuenergia.fi/")
     resp.raise_for_status()
     tok = get_csrf_token(resp)
     resp = sess.post(
-        url="https://www.energiaonline.fi/Authentication/Login",
+        url="https://energiaonline.turkuenergia.fi/eServices/Online/Login",
         data={
             "UserName": cfg.username,
             "Password": cfg.password,
-            "Configuration": cfg.configuration,
+            "__RequestVerificationToken": tok,
         },
         headers={
-            "Referer": "https://www.energiaonline.fi/Home/Index",
-            "__requestverificationtoken": tok,
+            "Referer": "https://energiaonline.turkuenergia.fi/eServices/Online",
         },
     )
     resp.raise_for_status()
     if "Asiakasnumero tai salasana oli väärä" in resp.text:
         raise RuntimeError("Invalid user credentials")
-    if resp.url != "https://www.energiaonline.fi/Authentication/Login":
-        raise RuntimeError("Unexpected redirect URL after login")
-    log.info("Login successful, doing post redirect")
-    resp = sess.get("https://www.energiaonline.fi" + resp.json()["Redirect"])
-    resp.raise_for_status()
+    if resp.url != "https://energiaonline.turkuenergia.fi/eServices/Online":
+        raise RuntimeError(f"Unexpected redirect URL {resp.url} after login")
+    log.info("Login successful")

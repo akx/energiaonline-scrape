@@ -1,109 +1,73 @@
 import datetime
 import json
 import logging
-from typing import Iterable, Optional, Callable
+import re
+from typing import Any, Dict, Iterator, Tuple
 
 import requests
-from dateutil.relativedelta import relativedelta
 
-from eos.models import UsageData
-from eos.scrape.delivery_sites import get_delivery_sites
-from eos.scrape.utils import get_reporting_token
+from eos.models import UsageData, DeliverySite, UsageDataPoint
 
 log = logging.getLogger(__name__)
 
 
-def iter_dates(
-    d1: datetime.date, d2: datetime.date, **delta_kwargs
-) -> Iterable[datetime.date]:
-    d = d1
-    dt = relativedelta(**delta_kwargs)
-    while d <= d2:
-        yield d
-        d += dt
+def parse_js_variable(html: str, name: str) -> Any:
+    match = re.search(f"var {name} = (.+?);", html, flags=re.MULTILINE)
+    if not match:
+        raise ValueError(f"No match for {name}")
+
+    data = match.group(1)
+
+    # Replace new Date invocations with bare numbers
+    data = re.sub(r"new Date\(([-0-9]+)\)", r"\1", data)
+
+    return json.loads(data)
 
 
-USAGE_RESOLUTION_CHOICES = {
-    "hourly",
-    "daily",
-}
+def parse_series(
+    series: dict, *, truncate_to_day: bool = False
+) -> Iterator[Tuple[datetime.datetime, Any]]:
+    for timestamp, value in series.get("Data", []):
+        ts = datetime.datetime.fromtimestamp(timestamp / 1000)
+        if truncate_to_day:
+            ts = ts.replace(hour=0, minute=0, second=0, microsecond=0)
+        yield (ts, value)
+
+
+def parse_usage_data(
+    model_data: dict, bucket: str
+) -> Dict[datetime.datetime, UsageDataPoint]:
+    # TODO: handle timezone information?
+    truncate_to_day = bucket != "Hours"
+    bucketed_data = model_data[bucket]
+    temp_series = bucketed_data.get("Temperature")
+    temperatures = dict(parse_series(temp_series, truncate_to_day=truncate_to_day))
+    hourly_cons_and_temp = {}
+    for cons in bucketed_data["Consumptions"]:
+        series = cons["Series"]
+        for timestamp, value in parse_series(series, truncate_to_day=truncate_to_day):
+            hourly_cons_and_temp[timestamp] = UsageDataPoint(
+                resolution=series["Resolution"],
+                timestamp=timestamp,
+                usage=value,
+                temperature=temperatures.get(timestamp),
+            )
+    return hourly_cons_and_temp
 
 
 def get_usage(
     *,
     sess: requests.Session,
-    site_id: str,
-    customer_id: str,
-    resolution: str,
-    start_date: datetime.date,
-    end_date: datetime.date,
-    date_filter: Optional[Callable[[datetime.date], bool]] = None,
+    site: DeliverySite,
 ) -> UsageData:
-    token = get_reporting_token(sess)
-    list(get_delivery_sites(sess, token))  # required for correct sequence, who knows...
-    headers = {
-        "Accept": "*/*",
-        "Origin": "https://www.energiaonline.fi",
-        "Referer": "https://www.energiaonline.fi/EnergyReporting/EnergyReporting",
-        "X-Requested-With": "XMLHttpRequest",
-        "__RequestVerificationToken": token,
-    }
-
-    log.info("Making ShowDeliverysite request...")
-    sess.cookies.set("SelectedLanguage", "fi")
-
-    resp = sess.post(
-        url="https://www.energiaonline.fi/EnergyReporting/ShowDeliverysite",
-        headers=headers,
-        data={
-            "code": site_id,
-            "customerCode": customer_id,
-        },
+    resp = sess.get(
+        url=f"https://energiaonline.turkuenergia.fi/Reporting/CustomerConsumption?meteringPointCode={site.metering_point_code}&mpSourceCompanyCode={site.source_company_code}&networkCode={site.network_company_code}&loadLastYearData=True",
     )
     resp.raise_for_status()
-    delivery_site_info = resp.json()
-
-    datums = []
-    if resolution == "hourly":
-        date_iter = iter_dates(start_date, end_date, days=1)
-        get_data = lambda date: {
-            "view": "DayP",
-            "resolution": "",
-            "options": "SPOT,TEMP",
-            "dateStart": date.isoformat(),
-            "dateEnd": date.isoformat(),
-        }
-    elif resolution == "daily":
-        date_iter = iter_dates(start_date, end_date, months=1)
-        get_data = lambda date: {
-            "view": "MonthP",
-            "resolution": "",
-            "options": "SPOT,TEMP",
-            "dateStart": date.isoformat(),
-            "dateEnd": (date + relativedelta(months=1)).isoformat(),
-        }
-    else:
-        raise ValueError(f"Unknown resolution {resolution}")
-
-    for i, date in enumerate(date_iter, 1):
-        if date_filter and not date_filter(date):
-            log.info(f"Skipping request for {date}")
-            continue
-        log.info(f"Making {resolution} ShowReportingView request {i} ({date})...")
-        resp = sess.post(
-            url="https://www.energiaonline.fi/EnergyReporting/ShowReportingView",
-            headers=headers,
-            data=get_data(date),
-        )
-        resp.raise_for_status()
-        report_data = resp.json()
-        cfg = json.loads(report_data["config"])
-        datums.extend(cfg["dataProvider"])
-
+    text = resp.content.decode("UTF-8")
+    model_data = parse_js_variable(text, "model")
     return UsageData(
-        customer_id=customer_id,
-        site_id=site_id,
-        resolution=resolution,
-        data=datums,
-        delivery_site_info=delivery_site_info,
+        site=site,
+        hourly_usage_data=parse_usage_data(model_data, bucket="Hours"),
+        daily_usage_data=parse_usage_data(model_data, bucket="Days"),
     )
