@@ -3,7 +3,7 @@ import datetime
 import sqlalchemy as sa
 from sqlalchemy import func
 
-from eos.models import UsageData
+from eos.models import UsageData, UsageDataPoint
 
 
 def patch_sqlite_on_conflict_do_nothing():
@@ -42,7 +42,6 @@ def get_metadata(bind=None, data_table_name="eos_data"):
 
 
 def populate_usage(metadata: sa.MetaData, usage: UsageData):
-    assert usage.resolution == "hourly"
     engine = metadata.bind
     data_table: sa.Table = metadata.tables[metadata.data_table_name]
     conn = engine.connect()
@@ -57,7 +56,6 @@ def find_extant_dates(
     metadata: sa.MetaData,
     start_date: datetime.date,
     end_date: datetime.date,
-    customer_id: str,
     site_id: str,
 ):
     data_table: sa.Table = metadata.tables[metadata.data_table_name]
@@ -67,7 +65,6 @@ def find_extant_dates(
         sa.sql.select([sa.cast(data_table.c.dt, sa.Date)])
         .where(
             data_table.c.timestamp.between(ts0, ts1)
-            & (data_table.c.customer_id == (customer_id))
             & (data_table.c.site_id == (site_id))
         )
         .distinct()
@@ -76,25 +73,15 @@ def find_extant_dates(
 
 
 def generate_sql_params(usage: UsageData):
-    for data in usage.data:
-        data = {
-            k: v
-            for (k, v) in data.items()
-            if not (k.endswith("_ROUND") or k.endswith("_UNIT"))
-        }
-        date = datetime.datetime.fromisoformat(data.pop("date"))
-        start_date = datetime.datetime.fromisoformat(data.pop("startDate"))
-        end_date = datetime.datetime.fromisoformat(data.pop("endDate"))
-        assert (end_date - start_date).total_seconds() == 3600
-        assert date == start_date
-        utc_ts = date.astimezone(datetime.timezone.utc)
+    point: UsageDataPoint
+    for _, point in sorted(usage.hourly_usage_data.items()):
         yield {
-            "site_id": usage.site_id,
-            "customer_id": usage.customer_id,
-            "timestamp": utc_ts.timestamp(),
-            "dt": date,
-            "data": data,
-            "temperature": data.get("TEMP"),
-            "consumption": data.get("PS"),
-            "spot_price": data.get("SPOT"),
+            "site_id": usage.site.metering_point_code,
+            "customer_id": 0,
+            "timestamp": point.timestamp,
+            "dt": point.timestamp.date(),
+            "data": point.as_dict(),
+            "temperature": point.temperature,
+            "consumption": point.usage,
+            "spot_price": None,  # TODO: Not available in EOv2 yet...
         }

@@ -10,7 +10,7 @@ import eos.scrape.usage as us
 from eos.configuration import Configuration
 from eos.context import Context
 from eos.scrape.auth import do_login
-from eos.utils import fix_date_defaults
+from eos.utils import fix_date_defaults, find_site_with_code
 
 envparse.Env.read_envfile()
 
@@ -39,7 +39,7 @@ def parse_date(s: str) -> datetime.date:
 
 
 @main.command(name="usage")
-@click.option("-s", "--site", required=True)
+@click.option("-s", "--site", "site_id", required=True)
 @click.option("--start-date", type=parse_date)
 @click.option("--end-date", type=parse_date)
 @click.option(
@@ -47,20 +47,15 @@ def parse_date(s: str) -> datetime.date:
     default="hourly",
     type=click.Choice(["daily", "hourly"]),
 )
-def get_usage(site: str, start_date, end_date, resolution):
+def get_usage(site_id: str, start_date, end_date, resolution):
     start_date, end_date = fix_date_defaults(start_date, end_date)
     ctx: Context = click.get_current_context().meta["ecs"]
     do_login(ctx.sess, ctx.cfg)
-    site_obj = next(
-        (s for s in dss.get_delivery_sites(ctx.sess) if s.metering_point_code == site),
-        None,
-    )
-    if not site_obj:
-        raise ValueError(f"Site not found for MPC {site}")
+    site = find_site_with_code(ctx.sess, site_id)
 
     usage = us.get_usage(
         sess=ctx.sess,
-        site=site_obj,
+        site=site,
     )
 
     usage_data = (
@@ -78,15 +73,14 @@ def get_usage(site: str, start_date, end_date, resolution):
 
 
 @main.command(name="update_database")
-@click.option("-s", "--site", envvar="EO_SITE_ID", required=True)
-@click.option("-c", "--customer", envvar="EO_CUSTOMER_ID", required=True)
+@click.option("-s", "--site", "site_id", envvar="EO_SITE_ID", required=True)
 @click.option(
     "--db", "--database-url", "database_url", envvar="EO_DATABASE_URL", required=True
 )
 @click.option("--start-date", type=parse_date)
 @click.option("--end-date", type=parse_date)
 @click.option("--back-days", type=int, default=7)
-def update_database(site, customer, database_url, start_date, end_date, back_days):
+def update_database(site_id, database_url, start_date, end_date, back_days):
     start_date, end_date = fix_date_defaults(start_date, end_date, back_days=back_days)
     log.info(f"Requesting and updating usage for {start_date}..{end_date}")
     ctx: Context = click.get_current_context().meta["ecs"]
@@ -100,27 +94,19 @@ def update_database(site, customer, database_url, start_date, end_date, back_day
         metadata,
         start_date=start_date,
         end_date=end_date,
-        customer_id=customer,
-        site_id=site,
+        site_id=site_id,
     )
     if len(extant_dates) >= (end_date - start_date).days:
         log.info("Nothing to do, all data already found.")
         return
-    if extant_dates:
-        log.info(f"Will skip requests for {len(extant_dates)} previously fetched dates")
 
     do_login(ctx.sess, ctx.cfg)
+    site = find_site_with_code(ctx.sess, metering_point_code=site_id)
     usage = us.get_usage(
         sess=ctx.sess,
-        site_id=site,
-        customer_id=customer,
-        start_date=start_date,
-        end_date=end_date,
-        resolution="hourly",
-        date_filter=lambda date: date not in extant_dates,
+        site=site,
     )
-    if usage.data:
-        ed.populate_usage(metadata, usage)
+    ed.populate_usage(metadata, usage)
 
 
 if __name__ == "__main__":

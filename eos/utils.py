@@ -1,6 +1,11 @@
 import datetime
 from typing import Tuple, Optional
 
+import requests
+
+from eos.models import DeliverySite
+from eos.scrape import delivery_sites as dss
+
 
 def fix_date_defaults(
     start_date: Optional[datetime.date],
@@ -12,3 +17,10 @@ def fix_date_defaults(
     if not start_date:
         start_date = end_date - datetime.timedelta(days=back_days)
     return start_date, end_date
+
+
+def find_site_with_code(sess: requests.Session, metering_point_code: str) -> DeliverySite:
+    for site in dss.get_delivery_sites(sess):
+        if site.metering_point_code == metering_point_code:
+            return site
+    raise ValueError(f"Site not found for MPC {metering_point_code}")
