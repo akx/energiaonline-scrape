@@ -1,5 +1,6 @@
+import datetime
 from dataclasses import dataclass, asdict
-from typing import Optional, List
+from typing import Optional, List, Dict
 
 
 @dataclass
@@ -22,12 +23,20 @@ class DeliverySite:
 
 
 @dataclass
-class UsageData:
+class UsageDataPoint:
     resolution: str
-    customer_id: str
-    site_id: str
-    delivery_site_info: dict
-    data: List[dict]
+    timestamp: datetime.datetime
+    usage: float
+    temperature: Optional[float]
 
     def as_dict(self):
-        return asdict(self)
+        d = asdict(self)
+        d["timestamp"] = d["timestamp"].isoformat()
+        return d
+
+
+@dataclass
+class UsageData:
+    site: DeliverySite
+    hourly_usage_data: Dict[datetime.datetime, UsageDataPoint]
+    daily_usage_data: Dict[datetime.datetime, UsageDataPoint]

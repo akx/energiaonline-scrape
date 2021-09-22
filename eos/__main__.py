@@ -10,6 +10,7 @@ import eos.scrape.usage as us
 from eos.configuration import Configuration
 from eos.context import Context
 from eos.scrape.auth import do_login
+from eos.utils import fix_date_defaults
 
 envparse.Env.read_envfile()
 
@@ -39,35 +40,41 @@ def parse_date(s: str) -> datetime.date:
 
 @main.command(name="usage")
 @click.option("-s", "--site", required=True)
-@click.option("-c", "--customer", required=True)
 @click.option("--start-date", type=parse_date)
 @click.option("--end-date", type=parse_date)
 @click.option(
     "--resolution",
     default="hourly",
-    type=click.Choice(us.USAGE_RESOLUTION_CHOICES),
+    type=click.Choice(["daily", "hourly"]),
 )
-def get_usage(site, customer, start_date, end_date, resolution):
-    start_date, end_date = _fix_date_defaults(start_date, end_date)
+def get_usage(site: str, start_date, end_date, resolution):
+    start_date, end_date = fix_date_defaults(start_date, end_date)
     ctx: Context = click.get_current_context().meta["ecs"]
     do_login(ctx.sess, ctx.cfg)
+    site_obj = next(
+        (s for s in dss.get_delivery_sites(ctx.sess) if s.metering_point_code == site),
+        None,
+    )
+    if not site_obj:
+        raise ValueError(f"Site not found for MPC {site}")
+
     usage = us.get_usage(
         sess=ctx.sess,
-        site_id=site,
-        customer_id=customer,
-        start_date=start_date,
-        end_date=end_date,
-        resolution=resolution,
+        site=site_obj,
     )
-    print(json.dumps(usage.as_dict(), indent=2, sort_keys=True, ensure_ascii=False))
 
-
-def _fix_date_defaults(start_date, end_date, back_days=30):
-    if not end_date:
-        end_date = datetime.date.today() - datetime.timedelta(days=1)
-    if not start_date:
-        start_date = end_date - datetime.timedelta(days=back_days)
-    return start_date, end_date
+    usage_data = (
+        usage.daily_usage_data if resolution == "daily" else usage.hourly_usage_data
+    )
+    start_datetime = datetime.datetime.combine(
+        date=start_date, time=datetime.time(0, 0, 0)
+    )
+    end_datetime = datetime.datetime.combine(
+        date=end_date, time=datetime.time(23, 59, 59)
+    )
+    for ts, datum in sorted(usage_data.items()):
+        if start_datetime <= ts <= end_datetime:
+            print(json.dumps(datum.as_dict()))
 
 
 @main.command(name="update_database")
@@ -80,7 +87,7 @@ def _fix_date_defaults(start_date, end_date, back_days=30):
 @click.option("--end-date", type=parse_date)
 @click.option("--back-days", type=int, default=7)
 def update_database(site, customer, database_url, start_date, end_date, back_days):
-    start_date, end_date = _fix_date_defaults(start_date, end_date, back_days=back_days)
+    start_date, end_date = fix_date_defaults(start_date, end_date, back_days=back_days)
     log.info(f"Requesting and updating usage for {start_date}..{end_date}")
     ctx: Context = click.get_current_context().meta["ecs"]
     import sqlalchemy
