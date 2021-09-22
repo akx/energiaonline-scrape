@@ -1,7 +1,4 @@
-import datetime
-
 import sqlalchemy as sa
-from sqlalchemy import func
 
 from eos.models import UsageData, UsageDataPoint
 
@@ -50,26 +47,6 @@ def populate_usage(metadata: sa.MetaData, usage: UsageData):
         patch_sqlite_on_conflict_do_nothing()
         kwargs["sqlite_on_conflict_do_nothing"] = True
     return conn.execute(data_table.insert(**kwargs), list(generate_sql_params(usage)))
-
-
-def find_extant_dates(
-    metadata: sa.MetaData,
-    start_date: datetime.date,
-    end_date: datetime.date,
-    site_id: str,
-):
-    data_table: sa.Table = metadata.tables[metadata.data_table_name]
-    ts0 = datetime.datetime.combine(start_date, datetime.time()).timestamp()
-    ts1 = datetime.datetime.combine(end_date, datetime.time(23, 59, 59)).timestamp()
-    q = (
-        sa.sql.select([sa.cast(data_table.c.dt, sa.Date)])
-        .where(
-            data_table.c.timestamp.between(ts0, ts1)
-            & (data_table.c.site_id == (site_id))
-        )
-        .distinct()
-    )
-    return {r[0] for r in metadata.bind.connect().execute(q)}
 
 
 def generate_sql_params(usage: UsageData):

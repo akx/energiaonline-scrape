@@ -77,12 +77,7 @@ def get_usage(site_id: str, start_date, end_date, resolution):
 @click.option(
     "--db", "--database-url", "database_url", envvar="EO_DATABASE_URL", required=True
 )
-@click.option("--start-date", type=parse_date)
-@click.option("--end-date", type=parse_date)
-@click.option("--back-days", type=int, default=7)
-def update_database(site_id, database_url, start_date, end_date, back_days):
-    start_date, end_date = fix_date_defaults(start_date, end_date, back_days=back_days)
-    log.info(f"Requesting and updating usage for {start_date}..{end_date}")
+def update_database(site_id, database_url):
     ctx: Context = click.get_current_context().meta["ecs"]
     import sqlalchemy
     import eos.database as ed
@@ -90,21 +85,15 @@ def update_database(site_id, database_url, start_date, end_date, back_days):
     engine = sqlalchemy.create_engine(database_url)
     metadata = ed.get_metadata(engine)
     metadata.create_all()
-    extant_dates = ed.find_extant_dates(
-        metadata,
-        start_date=start_date,
-        end_date=end_date,
-        site_id=site_id,
-    )
-    if len(extant_dates) >= (end_date - start_date).days:
-        log.info("Nothing to do, all data already found.")
-        return
-
     do_login(ctx.sess, ctx.cfg)
     site = find_site_with_code(ctx.sess, metering_point_code=site_id)
     usage = us.get_usage(
         sess=ctx.sess,
         site=site,
+    )
+    log.info(
+        f"Hourly usage data entries: {len(usage.hourly_usage_data)}: "
+        f"{min(usage.hourly_usage_data)} .. {max(usage.hourly_usage_data)}"
     )
     ed.populate_usage(metadata, usage)
 
