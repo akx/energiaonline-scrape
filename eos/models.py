@@ -1,22 +1,24 @@
 from dataclasses import dataclass, asdict
 from typing import Optional, List
 
-import bs4
-
 
 @dataclass
 class DeliverySite:
-    site_id: str
-    customer_id: str
-    content_html: str = None
+    metering_point_code: str
+    network_company_code: str
+    source_company_code: str
+    customer_code: Optional[str]
+    original_data: dict
 
     @property
     def name(self) -> Optional[str]:
-        s = bs4.BeautifulSoup(self.content_html, features="html.parser")
-        text_tag: bs4.Tag = s.find("span", class_="optionText")
-        if text_tag:
-            return text_tag.get_text(strip=True, separator=" ")
-        return None
+        return self.original_data.get("StreetAddress")
+
+    def asdict(self):
+        d = asdict(self)
+        d["name"] = self.name
+        d.pop("original_data")
+        return d
 
 
 @dataclass

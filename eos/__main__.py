@@ -29,17 +29,8 @@ def main(*, username, password):
 def list_delivery_sites():
     ctx: Context = click.get_current_context().meta["ecs"]
     do_login(ctx.sess, ctx.cfg)
-    sites = list(dss.get_delivery_sites(ctx.sess))
-    for site in sites:
-        print(
-            json.dumps(
-                {
-                    "site_id": site.site_id,
-                    "customer_id": site.customer_id,
-                    "name": site.name or site.content_html,
-                }
-            )
-        )
+    for site in dss.get_delivery_sites(ctx.sess):
+        print(json.dumps(site.asdict()))
 
 
 def parse_date(s: str) -> datetime.date:
