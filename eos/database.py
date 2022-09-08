@@ -46,7 +46,12 @@ def populate_usage(metadata: sa.MetaData, usage: UsageData):
     if engine.dialect.name == "sqlite":
         patch_sqlite_on_conflict_do_nothing()
         kwargs["sqlite_on_conflict_do_nothing"] = True
-    return conn.execute(data_table.insert(**kwargs), list(generate_sql_params(usage)))
+    stmt = data_table.insert(**kwargs)
+    if engine.dialect.name == "postgresql":
+        stmt = stmt.on_conflict_do_nothing()
+    elif engine.dialect.name == "mysql":
+        stmt = stmt.prefix_with('IGNORE')  # https://stackoverflow.com/a/50870348/51685
+    return conn.execute(stmt, list(generate_sql_params(usage)))
 
 
 def generate_sql_params(usage: UsageData):
