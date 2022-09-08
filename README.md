@@ -11,7 +11,9 @@ https://www.energiaonline.fi/ , the Turku Energia self-service portal.
 ## Usage
 
 * You can also pass in your EO username and password as the environment variables `EO_USERNAME` and `EO_PASSWORD`.
-   They can also be read from an `.env` file.
+  They can also be read from an `.env` file.
+* If you have been delegated access to an account ("Käyttöoikeus"), use the `EO_DELEGATE_USERNAME` variable
+  (or the equivalent CLI option) to specify the username of that account.
 
 ### Listing distribution sites
 

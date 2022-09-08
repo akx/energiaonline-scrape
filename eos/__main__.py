@@ -20,8 +20,13 @@ log = logging.getLogger("eos")
 @click.group()
 @click.option("-u", "--username", envvar="EO_USERNAME", required=True)
 @click.option("-p", "--password", envvar="EO_PASSWORD", required=True)
-def main(*, username, password):
-    cfg = Configuration(username=username, password=password)
+@click.option("-du", "--delegate-user", envvar="EO_DELEGATE_USERNAME")
+def main(*, username, password, delegate_user):
+    cfg = Configuration(
+        username=username,
+        password=password,
+        delegate_username=delegate_user,
+    )
     click.get_current_context().meta["ecs"] = Context(cfg=cfg)
     logging.basicConfig(level=logging.DEBUG)
 
