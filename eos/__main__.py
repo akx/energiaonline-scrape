@@ -35,7 +35,10 @@ def main(*, username, password, delegate_user):
 def list_delivery_sites():
     ctx: Context = click.get_current_context().meta["ecs"]
     do_login(ctx.sess, ctx.cfg)
-    for site in dss.get_delivery_sites(ctx.sess):
+    sites = list(dss.get_delivery_sites(ctx.sess))
+    if not sites:
+        raise click.ClickException("No delivery sites found")
+    for site in sites:
         print(json.dumps(site.asdict()))
 
 
