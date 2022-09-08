@@ -18,14 +18,14 @@ def patch_sqlite_on_conflict_do_nothing():
     Insert.argument_for("sqlite", "on_conflict_do_nothing", False)
 
 
-def get_metadata(bind=None, data_table_name="eos_data"):
+def get_metadata(bind=None, data_table_name="eos_data_v2"):
     metadata = sa.MetaData(bind=bind)
     sa.Table(
         data_table_name,
         metadata,
         sa.Column("id", sa.Integer, primary_key=True, autoincrement=True),
-        sa.Column("site_id", sa.Integer),
-        sa.Column("customer_id", sa.Integer),
+        sa.Column("site_id", sa.String(100), nullable=False),
+        sa.Column("customer_id", sa.String(100), nullable=False),
         sa.Column("timestamp", sa.Integer),
         sa.Column("dt", sa.DateTime),
         sa.Column("temperature", sa.Float, nullable=True),
